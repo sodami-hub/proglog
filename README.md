@@ -4,5 +4,5 @@
 
 # 프로젝트 구조
 1. 커밋 로그 프로토타입 만들기[/LetsGo/internal/server/log.go]
-- 
+2. HTTP의 JSON 만들기[/LetsGo/internal/server/http.go]
 
