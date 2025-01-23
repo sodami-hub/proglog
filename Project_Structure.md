@@ -8,3 +8,4 @@
 - [/LetsGo/internal/server/log.go] 의 Record 자료형을 protobuf 메시지로 문법에 맞게 바꿔준다.
 4. protobuf가 바뀔 때마다 컴파일해야 하므로 Makefile 파일에 compile 이라는 타깃을 만들어두면 편리하다. [/StructureDataWithProtobuf]에 Makefile을 만든다.
 #### 3. 로그 패키지 작성
+5. 스토어 만들기 : 로그 패키지를 위한 [/internal/log/store.go] 코드를 작성한다.
