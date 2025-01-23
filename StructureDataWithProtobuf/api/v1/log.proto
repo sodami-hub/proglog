@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package log.v1;
+
+option go_package = "github.com/sodami-hub/api/log_v1"; // Go 코드의 패키지 명으로 사용됨
+
+message Record {
+    bytes value = 1;
+    uint64 offset = 2;
+}
