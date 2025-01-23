@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/sodami-hub/proglog/LetsGo/internal/server"
+	"github.com/sodami-hub/proglog/internal/server"
 )
 
 func main() {
