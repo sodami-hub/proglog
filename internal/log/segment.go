@@ -46,7 +46,7 @@ func newSegment(dir string, baseOffset uint64, c Config) (*segment, error) {
 		return nil, err
 	}
 	if off, _, err := s.index.Read(-1); err != nil {
-		s.nextOffset = baseOffset // index 파일의 사이즈가 0 -> 0번 부터 오프셋 시작
+		s.nextOffset = baseOffset // index 파일의 사이즈가 0 -> baseOffset 부터 오프셋 시작
 	} else {
 		s.nextOffset = baseOffset + uint64(off) + 1 // index의 마지막 위치가 off로 넘어옴 다음 오프셋을 구함.
 	}
@@ -76,6 +76,7 @@ func (s *segment) Append(record *api.Record) (offset uint64, err error) {
 	return cur, nil
 }
 
+// 매개변수 off는 절대값으로 넘어옴 0~ .... // 반면에 각 인덱스 파일의 순서는 0부터 시작됨.
 func (s *segment) Read(off uint64) (*api.Record, error) {
 	_, pos, err := s.index.Read(int64(off - s.baseOffset)) // 인덱스의 오프셋은 베이스오프셋에서의 상댓값이기 때문에...
 	if err != nil {

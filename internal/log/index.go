@@ -87,7 +87,7 @@ func (i *index) Read(in int64) (out uint32, pos uint64, err error) {
 	if i.size < pos+entWidth {
 		return 0, 0, io.EOF
 	}
-	out = enc.Uint32(i.mmap[pos : pos+offWidth])          // 레코드의 인덱스 오프셋 확인 (in == out) true 여야 됨
+	out = enc.Uint32(i.mmap[pos : pos+offWidth])          // 인덱스 오프셋 반환
 	pos = enc.Uint64(i.mmap[pos+offWidth : pos+entWidth]) // 오프셋에 연결된 실제 데이터의 파일에서의 위치
 	return out, pos, nil
 }
