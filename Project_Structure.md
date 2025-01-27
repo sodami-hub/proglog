@@ -22,7 +22,10 @@ $ go install google.golang.org/protobuf/cmd/protoc-gen-go
 $ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
 
 ```
-- Makefile 파일의 compile 타깃을 수정하여 gRPC 플로그인을 활성화하고 gRPC 서비스를 컴파일하게 한다. 프로토콜 버퍼도 고 코드로 다시 컴파일 해야 된다. message 타입이 추가 됐기 때문이다. 
+- (생략 gRPC 컴파일 명령어 입력 오류로 log.pb.go가 생성되지 않은 것 같음)Makefile 파일의 compile 타깃을 수정하여 gRPC 플로그인을 활성화하고 gRPC 서비스를 컴파일하게 한다. 프로토콜 버퍼도 고 코드로 다시 컴파일 해야 된다. message 타입이 추가 됐기 때문이다. 
+```
+$ make compile 
+```
 
 11. gRPC 서버 구현 : [/internal/server/server.go]
 - 컴파일러가 서버 측 로그 서비스 구현 API를 생성했으므로, 서버를 구현하려면 구조체를 만들고 protobuf에 정의해둔 서비스에 맞는 구조체의 메서드를 구현한다. 
@@ -34,3 +37,18 @@ $ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
 13. 서버 등록 : [internal/server/server.go]
 - 지금까지 서버 구현 과정에서 아직 gRPC에 관한 부분은 없었다. 서비스가 gRPC로 작동하려면 세단계가 필요하며, 이제 두 단계만 해결하면 된다. 먼저 gRPC 서버를 만들고, 서비스를 등록한다. 마지막 단계는 서버에 연결하려는 요청을 받는 리스터를 추가하는 것이다. 
 server.go 파일에 NewGRPCServer() 함수를 추가하여 서비슬르 인스턴스화하고, gRPC 서버를 생성하며, 서비스를 서버에 등록할 수 있게 한다. 사용자는 연결 요청을 수락하는 리스너만 추가하면 되는 gRPC 서버를 가진다.
+
+##### 5. 서비스 보안
+###### CFSSL로 나만의 CA(인증기관) 작동하기
+14. [test/ca-csr.json] : 파일을 만들고 JSON을 넣는다. CA에 관한 일반적인 정보를 담은 설정 파일이다.
+- CA를 초기화하고 인증서를 생성하려면 cfssl에 다양한 설정 파일을 전달해야 한다. CA 생성과 서버 인증서 생성을 위한 각각의 설정 파일과, CA에 관한 일반적인 정보를 담은 설정 파일이 필요하다.
+cfssl은 이 파일로 CA의 인증서를 설정한다. CN은 Common Name을 뜻하며 "My Awesome CA"라고 이름 붙였다. key는 인증서 서명에 사용할 알고리즘과 키의 크기를 담고 있다. names는 인증서에 추가할 다양한 이름 정보이다. names의 각 객체는 최소한 하나 이상의 "C"(나라),"L"(지역),"O"(조직),"OU"(부서, 예를 들어 key를 소유한 부서) 또는 "ST"(주)가 있어야 하며 하나 이상 조합할 수도 있다.
+15. [/test/ca-config.json] : CA의 정책을 정의하는 JSON이다.
+- CA가 어떤 인증설르 발행할지에 관한 설정이다. signing 부분은 서명 정책에 대한 설정이다. 설정대로 만들어지는 CA는 클라이언트와 서버의 인증서를 생성할 수 있고 생성한 인증서는 1년 뒤에 만료되며 디지털 서명, 암호화 키, 인증에 사용할 수 있다.
+16. [/test/server-csr.json] : cfssl은 이 설정 파일로 서버 인증설르 설정한다. hosts 필드는 인증서가 유효한 도메인명을 담고 있으며, 로컬 네트워크에서 서비스를 실행하기에 127.0.0.1 과 localhost를 넣어두었다.
+17. Makefile을 업데이트하여 cfssl과 cfssljson을 사용해서 인증서를 생성한다.
+- CONFIG_PATH 변수는 생성한 인증서를 저장할 위치이다. init 타깃에서 해당 디렉터리를 생성한다. 파일 시스템의 변하지 않는, 알려진 위치에 두면 코드에서 인증서를 찾고 사용하기 편리하다. gencert 타깃은 cfssl 도구와 우리가 추가한 설정 파일들을 사용하여 CA와 서버에서 쓸 인증서와 개인 키를 생성한다.
+18. [/internal/config/files.go] - 테스트에서 설정 파일들을 자주 참조하므로 별도의 패키지에 생성한 파일들의 경로를 변수에 넣어두면 참조하기 더 쉽다.
+19. [/internal/config/tls.go] - 인증서와 키 파일들로 *tls.Configs들을 만든다.
+20. tls를 사용해서 테스트를 할 수 있도록 server_test.go의 setupTest() 함수의 코드를 바꾼다.
+- 클라이언트가 CA를 사용하여 서버의 인증서를 검증하도록 한다. 서버 인증서가 다른 인증 기관에서 만든 것이라면, 즉, 클라이언트가 가진 CA로 인증서를 검증할 수 없다면, 클라이언트는 서버를 신뢰할 수 없기에 연결하지 않는다. 
