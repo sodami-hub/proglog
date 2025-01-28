@@ -20,7 +20,10 @@ import (
 func TestServ(t *testing.T) {
 	for scenario, fn := range map[string]func(
 		t *testing.T,
-		client api.LogClient,
+		//client api.LogClient,
+		// 멀티 클라이언트의 권한 테스트를 위한 클라이언트 매개변수 변경
+		rootClient api.LogClient,
+		nobodyClient api.LogClient,
 		config *Config,
 	){
 		"produce/consume a message to/from the log succeeds": testProduceConsume,
@@ -28,9 +31,9 @@ func TestServ(t *testing.T) {
 		"consume past log boundary fails":                    testConsumePastBoundary,
 	} {
 		t.Run(scenario, func(t *testing.T) {
-			client, config, teardown := setupTest(t, nil)
+			/*client,*/ rootClient, nobodyClient, config, teardown := setupTest(t, nil)
 			defer teardown()
-			fn(t, client, config)
+			fn(t, rootClient, nobodyClient, config)
 		})
 	}
 }
@@ -44,9 +47,9 @@ setupTest 함수는 각각의 테스트 케이스를 위한 준비를 해주는 
 이어서 서버를 생성하고 고루틴에서 요청을 처리한다. Serve() 메서드가 블로킹 호출이므로
 고루틴에서 호출하지 않으면 이어지는 테스트가 실행되지 않는다.
 */
-func setupTest(t *testing.T, fn func(*Config)) (client api.LogClient, cfg *Config, teardown func()) {
+func setupTest(t *testing.T, fn func(*Config)) (rootClient api.LogClient, nobodyClient api.LogClient, cfg *Config, teardown func()) {
 
-	// =============================== 일반적인 테스트(TLS 없이 insecure 모드로 연결)
+	// =============================== 일반적인 테스트(TLS 없이 insecure 모드로 연결) ========================================================
 	// t.Helper()
 
 	// l, err := net.Listen("tcp", ":0")
@@ -82,7 +85,7 @@ func setupTest(t *testing.T, fn func(*Config)) (client api.LogClient, cfg *Confi
 	// 	clog.Remove()
 	// }
 
-	// ========================= tls를 사용한 설정으로 코드를 변경한다.(서버 인증서로 인증!!)
+	// ========================= tls를 사용한 설정으로 코드를 변경한다.(서버 인증서로 인증!!) ======================================================================
 	// t.Helper()
 
 	// // 클라이언트의 TLS 인증서가 서버에서 만든 CA를 클라이언트의 Root Ca로, 다시 말해 서버의 인증서를 검증할 때 사용하도록 설정했다.
@@ -147,27 +150,107 @@ func setupTest(t *testing.T, fn func(*Config)) (client api.LogClient, cfg *Confi
 	// 	os.RemoveAll(dir)
 	// }
 
-	// =================================== TLS 상호 인증 테스트
+	// ========================================================= TLS 상호 인증 테스트 =======================================================================
+	// t.Helper()
+
+	// // Client의 인증서를 서버의 CA로 만들었기 때문에 통과할 것이다. 서버와 클라이언트는 서로의 인증서에 대해 CA로 TLS 상호 인증을 했다.
+	// // 서버는 중간자의 도청 걱정 없이 실제 클라이언트와 안심하고 통신한다.
+	// l, err := net.Listen("tcp", "127.0.0.1:0")
+	// require.NoError(t, err)
+	// clientTLSConfig, err := config.SetupTLSConfig(config.TLSConfig{
+	// 	CertFile: config.ClientCertFile,
+	// 	KeyFile:  config.ClientKeyFile,
+	// 	CAFile:   config.CAFile,
+	// })
+	// require.NoError(t, err)
+
+	// clientCreds := credentials.NewTLS(clientTLSConfig)
+	// cc, err := grpc.NewClient(
+	// 	l.Addr().String(), grpc.WithTransportCredentials(clientCreds),
+	// )
+	// require.NoError(t, err)
+
+	// client = api.NewLogClient(cc)
+
+	// serverTLSConfig, err := config.SetupTLSConfig(config.TLSConfig{
+	// 	CertFile:      config.ServerCertFile,
+	// 	KeyFile:       config.ServerKeyFile,
+	// 	CAFile:        config.CAFile,
+	// 	ServerAddress: l.Addr().String(),
+	// 	Server:        true,
+	// })
+
+	// require.NoError(t, err)
+	// serverCreds := credentials.NewTLS(serverTLSConfig)
+
+	// dir, err := os.MkdirTemp("", "server-test")
+	// require.NoError(t, err)
+
+	// clog, err := log.NewLog(dir, log.Config{})
+	// require.NoError(t, err)
+
+	// cfg = &Config{
+	// 	CommitLog: clog,
+	// }
+	// if fn != nil {
+	// 	fn(cfg)
+	// }
+
+	// // server.go의 NewGRPCServer() 함수의 매개변수를 수정해야 된다.
+	// server, err := NewGRPCServer(cfg, grpc.Creds(serverCreds))
+	// require.NoError(t, err)
+
+	// go func() {
+	// 	server.Serve(l)
+	// }()
+
+	// return client, cfg, func() {
+	// 	server.Stop()
+	// 	cc.Close()
+	// 	l.Close()
+	// 	os.RemoveAll(dir)
+	// }
+
+	// ================================================== ACL(권한) 테스트를 위한 멀티 클라이언트 ==============================
+
 	t.Helper()
 
-	// Client의 인증서를 서버의 CA로 만들었기 때문에 통과할 것이다. 서버와 클라이언트는 서로의 인증서에 대해 CA로 TLS 상호 인증을 했다.
-	// 서버는 중간자의 도청 걱정 없이 실제 클라이언트와 안심하고 통신한다.
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	clientTLSConfig, err := config.SetupTLSConfig(config.TLSConfig{
-		CertFile: config.ClientCertFile,
-		KeyFile:  config.ClientKeyFile,
-		CAFile:   config.CAFile,
-	})
-	require.NoError(t, err)
 
-	clientCreds := credentials.NewTLS(clientTLSConfig)
-	cc, err := grpc.NewClient(
-		l.Addr().String(), grpc.WithTransportCredentials(clientCreds),
+	/*
+		두 개의 클라이언트를 만들었다. root는 생산과 소비를 할 수 있다. nobody 클라이언트는 아무런 권한이 없다.
+		두 클라이언트를 생성하는 코드는 인증서와 키를 제외하고는 다르지 않다.
+		서버는 Authorizer 인스턴스를 받는데 서버의 권한 로직을 맡는다.
+	*/
+
+	newClient := func(crtPath, keyPath string) (*grpc.ClientConn, api.LogClient, []grpc.DialOption) {
+		tlsConfig, err := config.SetupTLSConfig(config.TLSConfig{
+			CertFile: crtPath,
+			KeyFile:  keyPath,
+			CAFile:   config.CAFile,
+			Server:   false,
+		})
+		require.NoError(t, err)
+		tlsCreds := credentials.NewTLS(tlsConfig)
+		opts := []grpc.DialOption{grpc.WithTransportCredentials(tlsCreds)}
+		conn, err := grpc.NewClient(l.Addr().String(), opts...)
+		require.NoError(t, err)
+		client := api.NewLogClient(conn)
+		return conn, client, opts
+	}
+
+	var rootConn *grpc.ClientConn
+	rootConn, rootClient, _ = newClient(
+		config.RootClientCertFile,
+		config.RootClientKeyFile,
 	)
-	require.NoError(t, err)
 
-	client = api.NewLogClient(cc)
+	var nobodyConn *grpc.ClientConn
+	nobodyConn, nobodyClient, _ = newClient(
+		config.NobodyClientCertFile,
+		config.NobodyClientKeyFile,
+	)
 
 	serverTLSConfig, err := config.SetupTLSConfig(config.TLSConfig{
 		CertFile:      config.ServerCertFile,
@@ -201,11 +284,11 @@ func setupTest(t *testing.T, fn func(*Config)) (client api.LogClient, cfg *Confi
 		server.Serve(l)
 	}()
 
-	return client, cfg, func() {
+	return rootClient, nobodyClient, cfg, func() {
 		server.Stop()
-		cc.Close()
+		rootConn.Close()
+		nobodyConn.Close()
 		l.Close()
-		os.RemoveAll(dir)
 	}
 }
 
@@ -214,7 +297,7 @@ testProduceConsume 테스트는 클라이언트와 서버를 이용해 생산과
 로그에 레코드를 추가하고 다시 소비하는지 확인한다.
 그리고 보낸 레코드의 오프셋으로 다시 받았을 때 같은 데이터인지 확인한다.
 */
-func testProduceConsume(t *testing.T, client api.LogClient, config *Config) {
+func testProduceConsume(t *testing.T, client, _ api.LogClient, config *Config) {
 	ctx := context.Background()
 
 	want := &api.Record{
@@ -241,7 +324,7 @@ func testProduceConsume(t *testing.T, client api.LogClient, config *Config) {
 testConsumePastBoundary 테스트는 클라이언트가 로그의 범위를 벗어난 소비를 시도할 때,
 서버가 api.ErrOffsetOutOfRange() 에러를 회신하는지 확인
 */
-func testConsumePastBoundary(t *testing.T, client api.LogClient, config *Config) {
+func testConsumePastBoundary(t *testing.T, client, _ api.LogClient, config *Config) {
 	ctx := context.Background()
 
 	produce, err := client.Produce(ctx, &api.ProduceRequest{
@@ -266,7 +349,7 @@ func testConsumePastBoundary(t *testing.T, client api.LogClient, config *Config)
 	}
 }
 
-func testProduceConsumeStream(t *testing.T, client api.LogClient, config *Config) {
+func testProduceConsumeStream(t *testing.T, client, _ api.LogClient, config *Config) {
 	ctx := context.Background()
 
 	records := []*api.Record{{

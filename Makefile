@@ -31,14 +31,26 @@ gencert:
 	cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=test/ca-config.json -profile=server\
 		test/server-csr.json | cfssljson -bare server
 
-# client 인증서 생성
+#   client 인증서 생성(서버와 같은 CA로 클라이언트의 인증서를 생성한다.)
 	cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=test/ca-config.json -profile=client\
 		test/client-csr.json | cfssljson -bare client
 
+# ACL(권한)에 대한 테스트를 위해서 여러 권한을 가진 클라이언트를 생성한다. - multi client
+	cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=test/ca-config.json -profile=client\
+		-cn="root" test/client-csr.json | cfssljson -bare root-client
+
+	cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=test/ca-config.json -profile=client\
+		-cn="nobody" test/client-csr.json | cfssljson -bare nobody-client
+
 	mv *.pem *.csr ${CONFIG_PATH}
 
+$(CONFIG_PATH)/model.conf:
+	cp test/model.conf $(CONFIG_PATH)/model.conf
+$(CONFIG_PATH)/policy.csv:
+	cp test/policy.csv $(CONFIG_PATH)/policy.csv
+
 .PHONY: test
-test:
+test: $(CONFIG_PATH)/policy.csv $(CONFIG_PATH)/model.conf
 	go test -race ./...
 
 # protobuf 컴파일
