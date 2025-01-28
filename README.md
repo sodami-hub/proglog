@@ -142,7 +142,7 @@ CFSSL 중에서 두 개의 도구를 사용하겠다.
 - cfssl: TLS 인증서를 서명하고, 증명하며, 묶어주고, 그 결과를 JSON으로 내보낸다.
 - cfssljson : JSON 출력을 받아서 키, 인증서, CSR, 번들 파일로 나눈다.
 
-다음 명령으로 설치한다.
+다음 명령으로 설치한다. go get -u 명령으로 의존성을 추가해줘야 되는건가? go get, go install 이거 잘 모르겠다.
 ```
 $ go install github.com/cloudflare/cfssl/cmd/cfssl
 $ go install gibhub.com/cloudflare/cfssl/cmd/cfssljson
@@ -153,3 +153,6 @@ $ make gencert
 ```
 
 - 이후의 과정은 Project_Structure를 통해서 설명한다.
+
+##### 5.3 TLS 상호 인증으로 클라이언트 인증하기
+TLS를 이용해 연결을 암호화하고 서버를 인증했다. 여기서 더 나아가 TLS 상호 인증(양방향 인증)을 구현해보겠다. 서버 역시 CA를 사용하여 클라이언트를 검증한다. 먼저 클라이언트 인증서가 필요하다. 클라이언트 인증서 또한 cfssl, cfssljson으로 생성할 수 있다.

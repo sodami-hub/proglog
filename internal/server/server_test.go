@@ -45,6 +45,8 @@ setupTest 함수는 각각의 테스트 케이스를 위한 준비를 해주는 
 고루틴에서 호출하지 않으면 이어지는 테스트가 실행되지 않는다.
 */
 func setupTest(t *testing.T, fn func(*Config)) (client api.LogClient, cfg *Config, teardown func()) {
+
+	// =============================== 일반적인 테스트(TLS 없이 insecure 모드로 연결)
 	// t.Helper()
 
 	// l, err := net.Listen("tcp", ":0")
@@ -80,15 +82,82 @@ func setupTest(t *testing.T, fn func(*Config)) (client api.LogClient, cfg *Confi
 	// 	clog.Remove()
 	// }
 
-	// tls를 사용한 설정으로 코드를 변경한다.
+	// ========================= tls를 사용한 설정으로 코드를 변경한다.(서버 인증서로 인증!!)
+	// t.Helper()
+
+	// // 클라이언트의 TLS 인증서가 서버에서 만든 CA를 클라이언트의 Root Ca로, 다시 말해 서버의 인증서를 검증할 때 사용하도록 설정했다.
+	// // 그리고 클라이언트는 이 인증서를 사용해서 연결한다.
+	// l, err := net.Listen("tcp", "127.0.0.1:0")
+	// require.NoError(t, err)
+	// clientTLSConfig, err := config.SetupTLSConfig(config.TLSConfig{
+	// 	CAFile: config.CAFile,
+	// })
+	// require.NoError(t, err)
+
+	// clientCreds := credentials.NewTLS(clientTLSConfig)
+	// cc, err := grpc.NewClient(
+	// 	l.Addr().String(), grpc.WithTransportCredentials(clientCreds),
+	// )
+	// require.NoError(t, err)
+
+	// client = api.NewLogClient(cc)
+
+	// // 서버에 인증서를 넣어서 TLS 연결을 처리하겠다.
+	// /*
+	// 	서버의 인증서와 키를 파싱했다. 그리고 서버의 TLS 인증서를 설정할 때 사용했다.
+	// 	이렇게 만든 인증서를 NewGRPCServer() 함수의 gRPC 서버 옵션으로 전달해서 gRPC 서버를 만들었다.
+	// 	gRPC 서버 옵션으로는 gRPC 서버의 여러 기능을 활성화할 수 있다. 여기서는 서버 연결을 위한 인증서 설정을 사용했다.
+	// 	그 외에도 연결의 타임아웃이나 keep alive 정책 등 다양한 서버 옵션을 설정할 수 있다.
+	// */
+	// serverTLSConfig, err := config.SetupTLSConfig(config.TLSConfig{
+	// 	CertFile:      config.ServerCertFile,
+	// 	KeyFile:       config.ServerKeyFile,
+	// 	CAFile:        config.CAFile,
+	// 	ServerAddress: l.Addr().String(),
+	// })
+
+	// require.NoError(t, err)
+	// serverCreds := credentials.NewTLS(serverTLSConfig)
+
+	// dir, err := os.MkdirTemp("", "server-test")
+	// require.NoError(t, err)
+
+	// clog, err := log.NewLog(dir, log.Config{})
+	// require.NoError(t, err)
+
+	// cfg = &Config{
+	// 	CommitLog: clog,
+	// }
+	// if fn != nil {
+	// 	fn(cfg)
+	// }
+
+	// // server.go의 NewGRPCServer() 함수의 매개변수를 수정해야 된다.
+	// server, err := NewGRPCServer(cfg, grpc.Creds(serverCreds))
+	// require.NoError(t, err)
+
+	// go func() {
+	// 	server.Serve(l)
+	// }()
+
+	// return client, cfg, func() {
+	// 	server.Stop()
+	// 	cc.Close()
+	// 	l.Close()
+	// 	os.RemoveAll(dir)
+	// }
+
+	// =================================== TLS 상호 인증 테스트
 	t.Helper()
 
-	// 클라이언트의 TLS 인증서가 서버에서 만든 CA를 클라이언트의 Root Ca로, 다시 말해 서버의 인증서를 검증할 때 사용하도록 설정했다.
-	// 그리고 클라이언트는 이 인증서를 사용해서 연결한다.
+	// Client의 인증서를 서버의 CA로 만들었기 때문에 통과할 것이다. 서버와 클라이언트는 서로의 인증서에 대해 CA로 TLS 상호 인증을 했다.
+	// 서버는 중간자의 도청 걱정 없이 실제 클라이언트와 안심하고 통신한다.
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	clientTLSConfig, err := config.SetupTLSConfig(config.TLSConfig{
-		CAFile: config.CAFile,
+		CertFile: config.ClientCertFile,
+		KeyFile:  config.ClientKeyFile,
+		CAFile:   config.CAFile,
 	})
 	require.NoError(t, err)
 
@@ -100,19 +169,14 @@ func setupTest(t *testing.T, fn func(*Config)) (client api.LogClient, cfg *Confi
 
 	client = api.NewLogClient(cc)
 
-	// 서버에 인증서를 넣어서 TLS 연결을 처리하겠다.
-	/*
-		서버의 인증서와 키를 파싱했다. 그리고 서버의 TLS 인증서를 설정할 때 사용했다.
-		이렇게 만든 인증서를 NewGRPCServer() 함수의 gRPC 서버 옵션으로 전달해서 gRPC 서버를 만들었다.
-		gRPC 서버 옵션으로는 gRPC 서버의 여러 기능을 활성화할 수 있다. 여기서는 서버 연결을 위한 인증서 설정을 사용했다.
-		그 외에도 연결의 타임아웃이나 keep alive 정책 등 다양한 서버 옵션을 설정할 수 있다.
-	*/
 	serverTLSConfig, err := config.SetupTLSConfig(config.TLSConfig{
 		CertFile:      config.ServerCertFile,
 		KeyFile:       config.ServerKeyFile,
 		CAFile:        config.CAFile,
 		ServerAddress: l.Addr().String(),
+		Server:        true,
 	})
+
 	require.NoError(t, err)
 	serverCreds := credentials.NewTLS(serverTLSConfig)
 

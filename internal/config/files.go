@@ -9,6 +9,9 @@ var (
 	CAFile         = configFile("ca.pem")
 	ServerCertFile = configFile("server.pem")
 	ServerKeyFile  = configFile("server-key.pem")
+	// 클라이언트 인증서를 위한 설정 파일 변수
+	ClientCertFile = configFile("client.pem")
+	ClientKeyFile  = configFile("client-key.pem")
 )
 
 func configFile(filename string) string {

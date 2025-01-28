@@ -52,3 +52,9 @@ cfssl은 이 파일로 CA의 인증서를 설정한다. CN은 Common Name을 뜻
 19. [/internal/config/tls.go] - 인증서와 키 파일들로 *tls.Configs들을 만든다.
 20. tls를 사용해서 테스트를 할 수 있도록 server_test.go의 setupTest() 함수의 코드를 바꾼다.
 - 클라이언트가 CA를 사용하여 서버의 인증서를 검증하도록 한다. 서버 인증서가 다른 인증 기관에서 만든 것이라면, 즉, 클라이언트가 가진 CA로 인증서를 검증할 수 없다면, 클라이언트는 서버를 신뢰할 수 없기에 연결하지 않는다. 
+###### TLS 상호인증
+- cfssl, cfssljson 으로 클라이언트의 인증서 생성하기.
+21. [/test/client-csr.json] : CN 필드가 중요하다. 클라이언트의 ID 또는 사용자명으로, 권한을 줄 때 사용하는 ID이다. 이 부분은 뒤에서 구현한다.
+22. [/Makefile] : gencert 타깃을 추가한다. 서버 인증서를 생성하는 부분 바로 아래이다.
+23. [/internal/config/files.go] : 클라이언트 인증서를 위한 설정 파일 변수를 추가한다.
+24. [/internal/server/server_test.go] : 테스트 파일의 서버 설정 부분 수정
