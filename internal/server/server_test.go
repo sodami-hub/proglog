@@ -7,14 +7,18 @@ import (
 	"testing"
 
 	api "github.com/sodami-hub/proglog/api/v1"
+	"github.com/sodami-hub/proglog/internal/auth"
 	"github.com/sodami-hub/proglog/internal/log"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/status"
 
 	// ../config/tls.go 의 테스트를 위한 패키지 임포트
 	"github.com/sodami-hub/proglog/internal/config"
 	"google.golang.org/grpc/credentials"
+
+	// 권한이 없는 클라이언트는 거부하는지 확인하는 테스트를 위한 임포트
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestServ(t *testing.T) {
@@ -29,6 +33,7 @@ func TestServ(t *testing.T) {
 		"produce/consume a message to/from the log succeeds": testProduceConsume,
 		"produce/consume stream succeeds":                    testProduceConsumeStream,
 		"consume past log boundary fails":                    testConsumePastBoundary,
+		"unauthorized fails":                                 testUnauthorized,
 	} {
 		t.Run(scenario, func(t *testing.T) {
 			/*client,*/ rootClient, nobodyClient, config, teardown := setupTest(t, nil)
@@ -269,8 +274,10 @@ func setupTest(t *testing.T, fn func(*Config)) (rootClient api.LogClient, nobody
 	clog, err := log.NewLog(dir, log.Config{})
 	require.NoError(t, err)
 
+	authorizer := auth.New(config.ACLModelFile, config.ACLPolicyFile)
 	cfg = &Config{
-		CommitLog: clog,
+		CommitLog:  clog,
+		Authorizer: authorizer,
 	}
 	if fn != nil {
 		fn(cfg)
@@ -388,5 +395,32 @@ func testProduceConsumeStream(t *testing.T, client, _ api.LogClient, config *Con
 				Offset: uint64(i),
 			})
 		}
+	}
+}
+
+// 권한에 대한 테스트에서는 nobody 클라이언트를 사용한다.
+func testUnauthorized(t *testing.T, _, client api.LogClient, config *Config) {
+	ctx := context.Background()
+	produce, err := client.Produce(ctx, &api.ProduceRequest{
+		Record: &api.Record{
+			Value: []byte("hello world"),
+		},
+	})
+	if produce != nil {
+		t.Fatalf("produce response should be nil")
+	}
+	gotCode, wantCode := status.Code(err), codes.PermissionDenied
+	if gotCode != wantCode {
+		t.Fatalf("got code: %d, want: %d", gotCode, wantCode)
+	}
+	consume, err := client.Consume(ctx, &api.ConsumeRequest{
+		Offset: 0,
+	})
+	if consume != nil {
+		t.Fatalf("consume response should be nil")
+	}
+	gotCode, wantCode = status.Code(err), codes.PermissionDenied
+	if gotCode != wantCode {
+		t.Fatalf("got code : %d, want code : %d", gotCode, wantCode)
 	}
 }
